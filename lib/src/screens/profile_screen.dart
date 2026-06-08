@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import '../providers.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -16,6 +18,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   late TextEditingController _usernameController;
   late TextEditingController _displayNameController;
   late TextEditingController _avatarUrlController;
+
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
+  bool _isDragging = false;
+  bool _isHovering = false;
 
   @override
   void initState() {
@@ -35,21 +42,75 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _pickImage() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.bytes != null) {
+          setState(() {
+            _selectedImageBytes = file.bytes;
+            _selectedImageName = file.name;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
+  }
+
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final authState = ref.read(authProvider);
+    final user = authState.user;
+    if (user == null) return;
+
+    String? avatarUrl = _avatarUrlController.text.trim().isEmpty
+        ? null
+        : _avatarUrlController.text.trim();
+
+    if (_selectedImageBytes != null && _selectedImageName != null) {
+      final uploadedUrl = await ref.read(authProvider.notifier).uploadAvatar(
+            bytes: _selectedImageBytes!,
+            fileName: _selectedImageName!,
+            userId: user.id,
+          );
+      if (uploadedUrl != null) {
+        avatarUrl = uploadedUrl;
+        _avatarUrlController.text = uploadedUrl;
+      } else {
+        if (mounted) {
+          final error = ref.read(authProvider).errorMessage ?? 'Failed to upload profile photo';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return;
+      }
+    }
 
     final success = await ref.read(authProvider.notifier).updateProfile(
           username: _usernameController.text.trim(),
           displayName: _displayNameController.text.trim().isEmpty
               ? null
               : _displayNameController.text.trim(),
-          avatarUrl: _avatarUrlController.text.trim().isEmpty
-              ? null
-              : _avatarUrlController.text.trim(),
+          avatarUrl: avatarUrl,
         );
 
     if (mounted) {
       if (success) {
+        setState(() {
+          _selectedImageBytes = null;
+          _selectedImageName = null;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Profile updated successfully!'),
@@ -171,51 +232,172 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     const SizedBox(height: 24),
 
-                    // Avatar Preview
+                    // Avatar Preview with Drag & Drop + Selection support
                     Center(
-                      child: Stack(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 110,
-                            height: 110,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF6C63FF), Color(0xFF4A90E2)],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF6C63FF).withOpacity(0.3),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            padding: const EdgeInsets.all(4),
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                              ),
-                              padding: const EdgeInsets.all(2),
-                              child: CircleAvatar(
-                                radius: 50,
-                                backgroundColor: isDark ? const Color(0xFF252538) : Colors.grey[100],
-                                backgroundImage: _avatarUrlController.text.trim().isNotEmpty
-                                    ? NetworkImage(_avatarUrlController.text.trim())
-                                    : null,
-                                child: _avatarUrlController.text.trim().isEmpty
-                                    ? Text(
-                                        (user?.readableName ?? 'U').substring(0, 1).toUpperCase(),
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 32,
-                                          fontWeight: FontWeight.bold,
-                                          color: const Color(0xFF6C63FF),
+                          DropTarget(
+                            onDragEntered: (details) => setState(() => _isDragging = true),
+                            onDragExited: (details) => setState(() => _isDragging = false),
+                            onDragDone: (details) async {
+                              setState(() => _isDragging = false);
+                              if (details.files.isNotEmpty) {
+                                final file = details.files.first;
+                                final bytes = await file.readAsBytes();
+                                setState(() {
+                                  _selectedImageBytes = bytes;
+                                  _selectedImageName = file.name;
+                                });
+                              }
+                            },
+                            child: MouseRegion(
+                              onEnter: (_) => setState(() => _isHovering = true),
+                              onExit: (_) => setState(() => _isHovering = false),
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                onTap: _pickImage,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 300),
+                                      width: 114,
+                                      height: 114,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: LinearGradient(
+                                          colors: _isDragging
+                                              ? [const Color(0xFF4A90E2), const Color(0xFF00FFCC)]
+                                              : [const Color(0xFF6C63FF), const Color(0xFF4A90E2)],
                                         ),
-                                      )
-                                    : null,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: (_isDragging ? const Color(0xFF00FFCC) : const Color(0xFF6C63FF)).withOpacity(0.4),
+                                            blurRadius: _isDragging ? 24 : 16,
+                                            offset: const Offset(0, 8),
+                                          ),
+                                        ],
+                                      ),
+                                      padding: const EdgeInsets.all(4),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                                        ),
+                                        padding: const EdgeInsets.all(2),
+                                        child: CircleAvatar(
+                                          radius: 50,
+                                          backgroundColor: isDark ? const Color(0xFF252538) : Colors.grey[100],
+                                          backgroundImage: _selectedImageBytes == null && _avatarUrlController.text.trim().isNotEmpty
+                                              ? NetworkImage(_avatarUrlController.text.trim())
+                                              : null,
+                                          child: _selectedImageBytes != null
+                                              ? ClipOval(
+                                                  child: Image.memory(
+                                                    _selectedImageBytes!,
+                                                    width: 100,
+                                                    height: 100,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                )
+                                              : _avatarUrlController.text.trim().isEmpty
+                                                  ? Text(
+                                                      (user?.readableName ?? 'U').substring(0, 1).toUpperCase(),
+                                                      style: GoogleFonts.outfit(
+                                                        fontSize: 32,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: const Color(0xFF6C63FF),
+                                                      ),
+                                                    )
+                                                  : null,
+                                        ),
+                                      ),
+                                    ),
+                                    // Hover / Drag-and-drop Overlay
+                                    AnimatedOpacity(
+                                      duration: const Duration(milliseconds: 200),
+                                      opacity: _isHovering || _isDragging ? 1.0 : 0.0,
+                                      child: Container(
+                                        width: 102,
+                                        height: 102,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.black.withOpacity(0.55),
+                                        ),
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                _isDragging ? Icons.file_download_rounded : Icons.cloud_upload_rounded,
+                                                color: Colors.white,
+                                                size: 24,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                _isDragging ? 'Drop Image!' : 'Upload Photo',
+                                                style: GoogleFonts.inter(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    // Small camera indicator
+                                    Positioned(
+                                      bottom: 2,
+                                      right: 2,
+                                      child: AnimatedScale(
+                                        duration: const Duration(milliseconds: 200),
+                                        scale: _isHovering || _isDragging ? 1.1 : 1.0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF6C63FF),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                                              width: 2.5,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF6C63FF).withOpacity(0.4),
+                                                blurRadius: 6,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Icon(
+                                            Icons.camera_alt_rounded,
+                                            color: Colors.white,
+                                            size: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _selectedImageName != null
+                                ? 'Selected: $_selectedImageName'
+                                : 'Drag & drop or click to change photo',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: _selectedImageName != null
+                                  ? const Color(0xFF6C63FF)
+                                  : (isDark ? Colors.white54 : Colors.grey[600]),
+                              fontWeight: _selectedImageName != null ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),

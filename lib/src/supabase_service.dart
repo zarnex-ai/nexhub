@@ -544,6 +544,27 @@ class SupabaseService {
     return _client.storage.from('attachments').getPublicUrl(uniqueName);
   }
 
+  Future<String> uploadAvatar(List<int> bytes, String fileName, String userId) async {
+    if (!isSupabaseConfigured) {
+      await Future.delayed(const Duration(milliseconds: 800));
+      return 'https://api.dicebear.com/7.x/adventurer/svg?seed=$userId';
+    }
+
+    final fileExtension = fileName.split('.').last;
+    final uniqueName = '$userId.$fileExtension';
+
+    await _client.storage
+        .from('avatars')
+        .uploadBinary(
+          uniqueName,
+          Uint8List.fromList(bytes),
+          fileOptions: const FileOptions(upsert: true),
+        );
+
+    final publicUrl = _client.storage.from('avatars').getPublicUrl(uniqueName);
+    return '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
   String? _getMimeType(String url) {
     if (url.contains('.png')) return 'image/png';
     if (url.contains('.jpg') || url.contains('.jpeg')) return 'image/jpeg';

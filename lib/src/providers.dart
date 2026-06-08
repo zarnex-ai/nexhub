@@ -99,6 +99,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
   }
+
+  Future<String?> uploadAvatar({
+    required List<int> bytes,
+    required String fileName,
+    required String userId,
+  }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final url = await _service.uploadAvatar(bytes, fileName, userId);
+      state = state.copyWith(isLoading: false);
+      return url;
+    } catch (e) {
+      state = state.copyWith(errorMessage: e.toString().replaceAll('Exception: ', ''), isLoading: false);
+      return null;
+    }
+  }
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {

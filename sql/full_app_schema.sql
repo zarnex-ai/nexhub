@@ -163,4 +163,36 @@ CREATE POLICY "snippets_delete"
     ON public.code_snippets
     FOR DELETE USING (auth.uid() = user_id);
 
+-- =============================================================
+-- 8. Storage Configuration for Avatars / Profiles
+-- =============================================================
+
+-- Create avatars bucket if not exists
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('avatars', 'avatars', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Allow public read access to avatars
+CREATE POLICY "Public Read Access"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'avatars' );
+
+-- Allow users to upload their own avatar named after their user ID
+CREATE POLICY "Allow users to upload own avatar"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK ( bucket_id = 'avatars' AND (split_part(name, '.', 1)) = auth.uid()::text );
+
+-- Allow users to update their own avatar
+CREATE POLICY "Allow users to update own avatar"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING ( bucket_id = 'avatars' AND (split_part(name, '.', 1)) = auth.uid()::text );
+
+-- Allow users to delete their own avatar
+CREATE POLICY "Allow users to delete own avatar"
+ON storage.objects FOR DELETE
+TO authenticated
+USING ( bucket_id = 'avatars' AND (split_part(name, '.', 1)) = auth.uid()::text );
+
 -- End of schema
