@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  desktop_drop
   emoji_picker_flutter
   gtk
   url_launcher_linux

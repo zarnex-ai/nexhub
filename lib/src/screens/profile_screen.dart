@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:desktop_drop/desktop_drop.dart';
 import '../providers.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -21,7 +20,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
-  bool _isDragging = false;
   bool _isHovering = false;
 
   @override
@@ -237,21 +235,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          DropTarget(
-                            onDragEntered: (details) => setState(() => _isDragging = true),
-                            onDragExited: (details) => setState(() => _isDragging = false),
-                            onDragDone: (details) async {
-                              setState(() => _isDragging = false);
-                              if (details.files.isNotEmpty) {
-                                final file = details.files.first;
-                                final bytes = await file.readAsBytes();
-                                setState(() {
-                                  _selectedImageBytes = bytes;
-                                  _selectedImageName = file.name;
-                                });
-                              }
-                            },
-                            child: MouseRegion(
+                          MouseRegion(
                               onEnter: (_) => setState(() => _isHovering = true),
                               onExit: (_) => setState(() => _isHovering = false),
                               cursor: SystemMouseCursors.click,
@@ -267,17 +251,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         gradient: LinearGradient(
-                                          colors: _isDragging
-                                              ? [const Color(0xFF4A90E2), const Color(0xFF00FFCC)]
-                                              : [const Color(0xFF6C63FF), const Color(0xFF4A90E2)],
+                                          colors: [
+                                              const Color(0xFF6C63FF),
+                                              const Color(0xFF4A90E2),
+                                          ],
                                         ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: (_isDragging ? const Color(0xFF00FFCC) : const Color(0xFF6C63FF)).withOpacity(0.4),
-                                            blurRadius: _isDragging ? 24 : 16,
-                                            offset: const Offset(0, 8),
-                                          ),
-                                        ],
                                       ),
                                       padding: const EdgeInsets.all(4),
                                       child: Container(
@@ -317,7 +295,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     // Hover / Drag-and-drop Overlay
                                     AnimatedOpacity(
                                       duration: const Duration(milliseconds: 200),
-                                      opacity: _isHovering || _isDragging ? 1.0 : 0.0,
+                                      opacity: _isHovering ? 1.0 : 0.0,
                                       child: Container(
                                         width: 102,
                                         height: 102,
@@ -329,14 +307,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                           child: Column(
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              Icon(
-                                                _isDragging ? Icons.file_download_rounded : Icons.cloud_upload_rounded,
+                                              const Icon(
+                                                Icons.cloud_upload_rounded,
                                                 color: Colors.white,
                                                 size: 24,
                                               ),
                                               const SizedBox(height: 4),
                                               Text(
-                                                _isDragging ? 'Drop Image!' : 'Upload Photo',
+                                                'Upload Photo',
                                                 style: GoogleFonts.inter(
                                                   color: Colors.white,
                                                   fontSize: 10,
@@ -354,7 +332,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       right: 2,
                                       child: AnimatedScale(
                                         duration: const Duration(milliseconds: 200),
-                                        scale: _isHovering || _isDragging ? 1.1 : 1.0,
+                                        scale: _isHovering ? 1.1 : 1.0,
                                         child: Container(
                                           padding: const EdgeInsets.all(6),
                                           decoration: BoxDecoration(
@@ -384,12 +362,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ),
                               ),
                             ),
-                          ),
                           const SizedBox(height: 12),
                           Text(
-                            _selectedImageName != null
-                                ? 'Selected: $_selectedImageName'
-                                : 'Drag & drop or click to change photo',
+                            'Click to change photo',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: _selectedImageName != null
