@@ -13,6 +13,7 @@ if [ ! -d "$FLUTTER_HOME" ]; then
 fi
 
 export PATH="$FLUTTER_HOME/bin:$PATH"
+export FLUTTER_ALLOW_ROOT=true  # Vercel runs as root — this suppresses the warning
 
 echo "==> Configuring Flutter for web..."
 flutter config --enable-web
