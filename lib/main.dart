@@ -11,5 +11,12 @@ Future<void> main() async {
     anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY',
         defaultValue: 'sb_publishable_jxIOWuaMUjpBuGyqpOeKJQ_8W4GPg11'),
   );
+
+
+
+
+
+
+
   runApp(const ProviderScope(child: MyApp()));
 }
